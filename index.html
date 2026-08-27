@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Budget Tracker</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --green: #4ade80;
+            --red: #f87171;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container { width: 100%; max-width: 500px; }
+        h2, h3 { text-align: center; margin-bottom: 15px; }
+
+        .card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .summary-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+        }
+
+        .summary-item h4 { margin: 0 0 5px 0; font-size: 12px; opacity: 0.8; }
+        .summary-item p { margin: 0; font-weight: bold; font-size: 15px; }
+
+        .income { color: var(--green); }
+        .expense { color: var(--red); }
+        .savings { color: var(--accent); }
+
+        form, .auth-box { display: flex; flex-direction: column; gap: 10px; }
+
+        input, select, button {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        button {
+            background: var(--accent);
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+
+        .logout-btn { background: var(--red); color: #fff; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+
+        th { background: #0f172a; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Auth View (Login / Signup) -->
+    <div id="authScreen" class="card">
+        <h2 id="authTitle">Login / Sign Up</h2>
+        <div class="auth-box">
+            <input type="email" id="emailInput" placeholder="Enter Email" required>
+            <input type="password" id="passInput" placeholder="Enter Password" required>
+            <button onclick="login()">Login</button>
+            <button style="background: #64748b; color: #fff;" onclick="signup()">Create New Account</button>
+        </div>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="appScreen" class="hidden">
+        <h2>Monthly Budget Tracker</h2>
+
+        <!-- Current Month Overview -->
+        <div class="card">
+            <h3 id="currentMonthTitle">Current Month</h3>
+            <div class="summary-box">
+                <div class="summary-item">
+                    <h4>Salary/Income</h4>
+                    <p class="income" id="totalSalary">Rs 0</p>
+                </div>
+                <div class="summary-item">
+                    <h4>Expenses</h4>
+                    <p class="expense" id="totalExpense">Rs 0</p>
+                </div>
+                <div class="summary-item">
+                    <h4>Savings</h4>
+                    <p class="savings" id="totalSavings">Rs 0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Form -->
+        <div class="card">
+            <h3>Add Entry</h3>
+            <form id="budgetForm">
+                <select id="type">
+                    <option value="salary">Salary / Income</option>
+                    <option value="expense">Expense</option>
+                </select>
+                <input type="text" id="description" placeholder="Description (e.g. Salary, Rent)" required>
+                <input type="number" id="amount" placeholder="Amount (Rs)" required>
+                <button type="submit">Save Entry</button>
+            </form>
+        </div>
+
+        <!-- Monthly History Ledger -->
+        <div class="card">
+            <h3>Monthly History Ledger</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Salary</th>
+                        <th>Expenses</th>
+                        <th>Savings</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerTable"></tbody>
+            </table>
+        </div>
+
+        <!-- Account Security / Change Password -->
+        <div class="card">
+            <h3>Account Settings</h3>
+            <div class="auth-box">
+                <input type="password" id="oldPassInput" placeholder="Current (Old) Password">
+                <input type="password" id="newPassInput" placeholder="New Password">
+                <button onclick="changePassword()">Change Password</button>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Config Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyDemoConfigKeyForBudgetTrackerApp123",
+        authDomain: "budget-tracker.firebaseapp.com",
+        databaseURL: "https://budget-tracker-default-rtdb.firebaseio.com",
+        projectId: "budget-tracker",
+        storageBucket: "budget-tracker.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:demo"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    document.getElementById('currentMonthTitle').innerText = currentMonthName;
+
+    let currentUser = null;
+    let appData = { activeMonthKey: currentMonthKey, months: {} };
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('appScreen').classList.remove('hidden');
+            loadCloudData();
+        } else {
+            currentUser = null;
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('appScreen').classList.add('hidden');
+        }
+    });
+
+    function login() {
+        const email = document.getElementById('emailInput').value;
+        const pass = document.getElementById('passInput').value;
+        auth.signInWithEmailAndPassword(email, pass).catch(err => alert(err.message));
+    }
+
+    function signup() {
+        const email = document.getElementById('emailInput').value;
+        const pass = document.getElementById('passInput').value;
+        auth.createUserWithEmailAndPassword(email, pass).catch(err => alert(err.message));
+    }
+
+    function logout() {
+        auth.signOut();
+    }
+
+    function changePassword() {
+        const oldPass = document.getElementById('oldPassInput').value;
+        const newPass = document.getElementById('newPassInput').value;
+
+        if (!oldPass || !newPass) return alert("Dono password enter karein!");
+
+        const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, oldPass);
+
+        // Pehle old password verify karo
+        currentUser.reauthenticateWithCredential(credential).then(() => {
+            // Sahi hone par new password update karo
+            currentUser.updatePassword(newPass).then(() => {
+                alert("Password successfully change ho gaya hai!");
+                document.getElementById('oldPassInput').value = '';
+                document.getElementById('newPassInput').value = '';
+            }).catch(err => alert(err.message));
+        }).catch(() => {
+            alert("Purana password galat hai!");
+        });
+    }
+
+    function loadCloudData() {
+        db.ref('users/' + currentUser.uid).on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                appData = data;
+            }
+            if (!appData.months) appData.months = {};
+            if (!appData.months[currentMonthKey]) {
+                appData.months[currentMonthKey] = {
+                    name: currentMonthName,
+                    salary: 0,
+                    expenses: 0,
+                    savings: 0
+                };
+            }
+            appData.activeMonthKey = currentMonthKey;
+            updateUI();
+        });
+    }
+
+    function saveData() {
+        db.ref('users/' + currentUser.uid).set(appData);
+    }
+
+    function updateUI() {
+        const currentData = appData.months[currentMonthKey] || { salary: 0, expenses: 0, savings: 0 };
+        currentData.savings = currentData.salary - currentData.expenses;
+
+        document.getElementById('totalSalary').innerText = `Rs ${currentData.salary}`;
+        document.getElementById('totalExpense').innerText = `Rs ${currentData.expenses}`;
+        document.getElementById('totalSavings').innerText = `Rs ${currentData.savings}`;
+
+        const ledgerBody = document.getElementById('ledgerTable');
+        ledgerBody.innerHTML = '';
+
+        Object.keys(appData.months).sort().reverse().forEach(mKey => {
+            const m = appData.months[mKey];
+            const row = `<tr>
+                <td><b>${m.name}</b></td>
+                <td class="income">Rs ${m.salary}</td>
+                <td class="expense">Rs ${m.expenses}</td>
+                <td class="savings">Rs ${m.savings}</td>
+            </tr>`;
+            ledgerBody.innerHTML += row;
+        });
+    }
+
+    document.getElementById('budgetForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const type = document.getElementById('type').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+
+        if (!amount || amount <= 0) return;
+
+        if (!appData.months[currentMonthKey]) {
+            appData.months[currentMonthKey] = { name: currentMonthName, salary: 0, expenses: 0, savings: 0 };
+        }
+
+        const currentData = appData.months[currentMonthKey];
+
+        if (type === 'salary') {
+            currentData.salary += amount;
+        } else {
+            currentData.expenses += amount;
+        }
+
+        document.getElementById('description').value = '';
+        document.getElementById('amount').value = '';
+
+        saveData();
+    });
+</script>
+
+</body>
+</html>
