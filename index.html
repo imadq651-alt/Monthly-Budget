@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Monthly Budget</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        :root { --primary: #2563eb; --danger: #dc2626; --warning: #d97706; --bg: #f8fafc; --success: #16a34a; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #334155; }
+        .container { max-width: 850px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .hidden { display: none !important; }
+        h2, h3, h4 { margin-top: 0; color: #1e293b; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .card { background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid var(--primary); }
+        .card h4 { margin: 0 0 5px 0; font-size: 13px; color: #64748b; }
+        .card p { margin: 0; font-size: 18px; font-weight: bold; }
+        .form-group { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        input, button { padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; outline: none; }
+        input { flex: 1; min-width: 140px; }
+        button { background: var(--primary); color: white; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.btn-danger { background: var(--danger); }
+        button.btn-success { background: var(--success); }
+        .search-box { margin-bottom: 15px; width: 100%; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        th { background: #f1f5f9; font-size: 12px; text-transform: uppercase; color: #475569; }
+        .actions { display: flex; gap: 5px; }
+        .actions button { padding: 5px 8px; font-size: 12px; }
+        .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; background: #e2e8f0; color: #475569; font-weight: normal; }
+
+        /* Lock Screen Overlay */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+        .login-card {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 360px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .login-card h3 { margin-bottom: 8px; color: #0f172a; }
+        .login-card p { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+        .login-card input { width: 100%; box-sizing: border-box; margin-bottom: 15px; text-align: center; font-size: 16px; }
+        .login-card button { width: 100%; padding: 12px; font-size: 15px; }
+    </style>
+</head>
+<body>
+
+<!-- Lock / Login Screen -->
+<div id="login-screen">
+    <div class="login-card">
+        <h3>Protected Access 🔒</h3>
+        <p>Aapko app dekhne ke liye Password enter karna padega.</p>
+        <input type="text" value="Admin" disabled style="background: #f1f5f9; color: #64748b; font-weight: bold;">
+        <input type="password" id="admin-pass-input" placeholder="Enter Password" onkeypress="if(event.key==='Enter') checkAdminPassword()">
+        <button onclick="checkAdminPassword()">Unlock App</button>
+    </div>
+</div>
+
+<!-- Main App UI -->
+<div class="container hidden" id="main-app">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>My Monthly Budget <span id="sync-status" class="status-badge">Connecting...</span></h2>
+        <div>
+            <button class="btn-success" style="padding: 6px 12px; font-size: 12px; margin-right: 5px;" onclick="toggleChangePassBox()">🔑 Password</button>
+            <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="logoutAdmin()">Lock App 🔒</button>
+        </div>
+    </div>
+
+    <!-- Change Password Form (Hidden by default) -->
+    <div class="form-group hidden" id="change-pass-box" style="border: 2px solid var(--success); background: #f0fdf4;">
+        <h4>Change Password</h4>
+        <div class="form-row">
+            <input type="password" id="old-pass" placeholder="Old Password">
+            <input type="password" id="new-pass" placeholder="New Password">
+            <button onclick="updatePassword()" class="btn-success">Update Password</button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid">
+        <div class="card">
+            <h4>Monthly Income</h4>
+            <p>Rs. <span id="disp-salary">0</span></p>
+        </div>
+        <div class="card">
+            <h4>Month Expenses</h4>
+            <p>Rs. <span id="disp-expenses">0</span></p>
+        </div>
+        <div class="card">
+            <h4>Remaining Balance</h4>
+            <p>Rs. <span id="disp-balance">0</span></p>
+        </div>
+        <div class="card">
+            <h4>Total Savings</h4>
+            <p>Rs. <span id="disp-savings">0</span></p>
+        </div>
+    </div>
+
+    <!-- Set Salary -->
+    <div class="form-group">
+        <h4>Set Monthly Salary</h4>
+        <div class="form-row">
+            <input type="number" id="salary-input" placeholder="Enter Salary Amount">
+            <button onclick="saveSalary()">Update Salary</button>
+        </div>
+    </div>
+
+    <!-- Add Expense -->
+    <div class="form-group">
+        <h4>Add New Expense</h4>
+        <div class="form-row">
+            <input type="text" id="exp-title" placeholder="Expense Title (e.g., Rent)">
+            <input type="number" id="exp-amount" placeholder="Amount">
+            <input type="month" id="exp-date">
+            <button onclick="addExpense()">Add Expense</button>
+        </div>
+    </div>
+
+    <!-- Ledger History -->
+    <div class="form-group">
+        <h4>Ledger History</h4>
+        <input type="text" id="search-input" class="search-box" onkeyup="filterLedger()" placeholder="Search by month (e.g. 2026-08) or title...">
+        <table>
+            <thead>
+                <tr>
+                    <th>Month / Date</th>
+                    <th>Title</th>
+                    <th>Amount</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="ledger-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Firebase Config
+    const firebaseConfig = {
+        apiKey: "AIzaSyDHdUBGQs9pGTZtJvExY7R",
+        authDomain: "my-monthly-budget-75294.firebaseapp.com",
+        databaseURL: "https://my-monthly-budget-75294-default-rtdb.firebaseio.com",
+        projectId: "my-monthly-budget-75294",
+        storageBucket: "my-monthly-budget-75294.firebasestorage.app",
+        messagingSenderId: "971970220243",
+        appId: "1:971970220243:web:d20324dc56"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Default Password (agar database mein setting na ho)
+    let currentAdminPass = "1234";
+    let state = { salary: 0, expenses: [] };
+
+    document.getElementById('exp-date').value = new Date().toISOString().slice(0, 7);
+
+    // Fetch Password from Database
+    db.ref('ledger_data/admin_password').on('value', (snapshot) => {
+        const passVal = snapshot.val();
+        if (passVal) {
+            currentAdminPass = passVal;
+        }
+    });
+
+    function checkAdminPassword() {
+        const inputPass = document.getElementById('admin-pass-input').value;
+        if (inputPass === currentAdminPass) {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            document.getElementById('admin-pass-input').value = '';
+            initFirebaseSync();
+        } else {
+            alert("Incorrect Password!");
+        }
+    }
+
+    function toggleChangePassBox() {
+        document.getElementById('change-pass-box').classList.toggle('hidden');
+    }
+
+    function updatePassword() {
+        const oldP = document.getElementById('old-pass').value;
+        const newP = document.getElementById('new-pass').value;
+
+        if (oldP !== currentAdminPass) {
+            alert("Old Password galat hai!");
+            return;
+        }
+        if (!newP || newP.length < 4) {
+            alert("Naya password kam se kam 4 characters ka hona chahiye!");
+            return;
+        }
+
+        db.ref('ledger_data/admin_password').set(newP, (error) => {
+            if (!error) {
+                alert("Password successfully change ho gaya hai!");
+                document.getElementById('old-pass').value = '';
+                document.getElementById('new-pass').value = '';
+                toggleChangePassBox();
+            } else {
+                alert("Error password update karne mein!");
+            }
+        });
+    }
+
+    function logoutAdmin() {
+        document.getElementById('main-app').classList.add('hidden');
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('change-pass-box').classList.add('hidden');
+    }
+
+    function initFirebaseSync() {
+        db.ref('ledger_data').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                state.salary = data.salary || 0;
+                state.expenses = data.expenses ? Object.values(data.expenses) : [];
+            } else {
+                state.salary = 0;
+                state.expenses = [];
+            }
+            document.getElementById('sync-status').innerText = 'Live Synced';
+            document.getElementById('sync-status').style.background = '#dcfce7';
+            document.getElementById('sync-status').style.color = '#15803d';
+            renderUI();
+        });
+    }
+
+    function saveSalary() {
+        const val = parseFloat(document.getElementById('salary-input').value);
+        if (isNaN(val)) return;
+        db.ref('ledger_data/salary').set(val);
+        document.getElementById('salary-input').value = '';
+    }
+
+    function addExpense() {
+        const title = document.getElementById('exp-title').value.trim();
+        const amount = parseFloat(document.getElementById('exp-amount').value);
+        const date = document.getElementById('exp-date').value;
+
+        if (!title || isNaN(amount) || !date) {
+            alert("Tamam details bharein!");
+            return;
+        }
+
+        const newRef = db.ref('ledger_data/expenses').push();
+        newRef.set({ id: newRef.key, title, amount, date });
+
+        document.getElementById('exp-title').value = '';
+        document.getElementById('exp-amount').value = '';
+    }
+
+    function deleteExpense(id) {
+        if (confirm("Kya aap delete karna chahte hain?")) {
+            db.ref('ledger_data/expenses/' + id).remove();
+        }
+    }
+
+    function filterLedger() {
+        const query = document.getElementById('search-input').value.toLowerCase();
+        const rows = document.querySelectorAll('#ledger-body tr');
+        rows.forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(query) ? '' : 'none';
+        });
+    }
+
+    function renderUI() {
+        const tbody = document.getElementById('ledger-body');
+        tbody.innerHTML = '';
+        let totalExpenses = 0;
+
+        state.expenses.sort((a,b) => b.date.localeCompare(a.date)).forEach(item => {
+            totalExpenses += item.amount;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.date}</td>
+                <td>${item.title}</td>
+                <td>Rs. ${item.amount.toLocaleString()}</td>
+                <td class="actions">
+                    <button class="btn-danger" onclick="deleteExpense('${item.id}')">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        const remainingBalance = state.salary - totalExpenses;
+        document.getElementById('disp-salary').innerText = state.salary.toLocaleString();
+        document.getElementById('disp-expenses').innerText = totalExpenses.toLocaleString();
+        document.getElementById('disp-balance').innerText = remainingBalance.toLocaleString();
+        document.getElementById('disp-savings').innerText = (remainingBalance > 0 ? remainingBalance : 0).toLocaleString();
+    }
+</script>
+</body>
+</html>
