@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Budget Tracker</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --green: #4ade80;
+            --red: #f87171;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container { width: 100%; max-width: 550px; }
+        h2, h3 { text-align: center; margin-bottom: 15px; }
+
+        .card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .summary-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+        }
+
+        .summary-item h4 { margin: 0 0 5px 0; font-size: 12px; opacity: 0.8; }
+        .summary-item p { margin: 0; font-weight: bold; font-size: 15px; }
+
+        .income { color: var(--green); }
+        .expense { color: var(--red); }
+        .savings { color: var(--accent); }
+
+        form, .auth-box { display: flex; flex-direction: column; gap: 10px; }
+
+        input, select, button {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        button {
+            background: var(--accent);
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+
+        .logout-btn { background: var(--red); color: #fff; }
+        .reset-btn { background: #e11d48; color: #fff; width: 100%; margin-top: 10px; }
+        .delete-btn { 
+            background: var(--red); 
+            color: #fff; 
+            padding: 6px 10px; 
+            font-size: 12px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            border: none;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        th, td {
+            padding: 10px 4px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+
+        th { background: #0f172a; }
+        .hidden { display: none !important; }
+        
+        .selector-box {
+            margin-bottom: 10px;
+        }
+        .selector-box select, .selector-box input {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div id="authScreen" class="card">
+        <h2 id="authTitle">Login / Sign Up</h2>
+        <div class="auth-box">
+            <input type="email" id="emailInput" placeholder="Enter Email" required>
+            <input type="password" id="passInput" placeholder="Enter Password" required>
+            <button onclick="login()">Login</button>
+            <button style="background: #64748b; color: #fff;" onclick="signup()">Create New Account</button>
+        </div>
+    </div>
+
+    <div id="appScreen" class="hidden">
+        <h2>Monthly Budget Tracker</h2>
+
+        <div class="card">
+            <div class="selector-box">
+                <label style="font-size: 12px; color: var(--accent);">Select Month to View Overview:</label>
+                <select id="monthSelect" onchange="changeSelectedMonth()"></select>
+            </div>
+            
+            <h3 id="currentMonthTitle">Overview</h3>
+            <div class="summary-box">
+                <div class="summary-item">
+                    <h4>Total Income</h4>
+                    <p class="income" id="totalSalary">Rs 0</p>
+                </div>
+                <div class="summary-item">
+                    <h4>Expenses</h4>
+                    <p class="expense" id="totalExpense">Rs 0</p>
+                </div>
+                <div class="summary-item">
+                    <h4>Savings</h4>
+                    <p class="savings" id="totalSavings">Rs 0</p>
+                </div>
+            </div>
+            <button class="reset-btn" onclick="resetCurrentMonth()">🔄 Reset Selected Month to 0</button>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--green);">Add Income / Salary</h3>
+            <form id="salaryForm">
+                <label style="font-size: 12px; color: var(--accent);">Select Date:</label>
+                <input type="date" id="salaryDate" required>
+                <input type="text" id="salaryDesc" placeholder="Source (e.g. Monthly Salary, Online Earning, Freelancing)" required>
+                <input type="number" id="salaryAmount" placeholder="Amount (Rs)" required>
+                <button type="submit" style="background: var(--green); color: #000;">Save Income</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Detailed Income Table</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Source</th>
+                        <th>Amount</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="incomeTableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--red);">Add Expense</h3>
+            <form id="expenseForm">
+                <label style="font-size: 12px; color: var(--accent);">Select Date:</label>
+                <input type="date" id="expenseDate" required>
+                <input type="text" id="expenseDesc" placeholder="Description (e.g. Gym, Rent, Groceries)" required>
+                <input type="number" id="expenseAmount" placeholder="Amount (Rs)" required>
+                <button type="submit" style="background: var(--red); color: #fff;">Save Expense</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Detailed Expenses Table</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="expenseTableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Monthly History Ledger</h3>
+            <div class="selector-box">
+                <input type="text" id="searchInput" onkeyup="filterLedger()" placeholder="🔍 Search month...">
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Income</th>
+                        <th>Expense</th>
+                        <th>Savings</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerTable"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Account Settings</h3>
+            <div class="auth-box">
+                <input type="password" id="oldPassInput" placeholder="Current (Old) Password">
+                <input type="password" id="newPassInput" placeholder="New Password">
+                <button onclick="changePassword()">Change Password</button>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Real Firebase Config
+    const firebaseConfig = {
+        apiKey: "AIzaSyDHdUBGQs9pGTZtJvExY7rXuOuk5QM8990",
+        authDomain: "my-monthly-budget-75294.firebaseapp.com",
+        databaseURL: "https://my-monthly-budget-75294-default-rtdb.firebaseio.com",
+        projectId: "my-monthly-budget-75294",
+        storageBucket: "my-monthly-budget-75294.firebasestorage.app",
+        messagingSenderId: "971970220243",
+        appId: "1:971970220243:web:a3a0bc1392d2092ad04426",
+        measurementId: "G-PR8L28H884"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    document.getElementById('expenseDate').valueAsDate = new Date();
+    document.getElementById('salaryDate').valueAsDate = new Date();
+
+    let selectedMonthKey = currentMonthKey;
+    let currentUser = null;
+    let appData = { activeMonthKey: currentMonthKey, months: {} };
+
+    function formatFullDate(dateStr) {
+        if (!dateStr) return "";
+        const parts = dateStr.split('-');
+        const dateObj = new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
+        const day = dateObj.getDate();
+        const month = dateObj.toLocaleString('default', { month: 'short' });
+        const year = dateObj.getFullYear();
+        const dayName = dateObj.toLocaleString('default', { weekday: 'long' });
+        return `${day} ${month} ${year}, ${dayName}`;
+    }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('appScreen').classList.remove('hidden');
+            loadCloudData();
+        } else {
+            currentUser = null;
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('appScreen').classList.add('hidden');
+        }
+    });
+
+    function login() {
+        const email = document.getElementById('emailInput').value.trim();
+        const pass = document.getElementById('passInput').value;
+
+        if (!email || !pass) return alert("Email aur Password dono darj karein!");
+
+        auth.signInWithEmailAndPassword(email, pass)
+            .then(() => alert("Login Successful!"))
+            .catch(err => alert("Login Error: " + err.message));
+    }
+
+    function signup() {
+        const email = document.getElementById('emailInput').value.trim();
+        const pass = document.getElementById('passInput').value;
+
+        if (!email || !pass) return alert("Email aur Password dono darj karein!");
+
+        auth.createUserWithEmailAndPassword(email, pass)
+            .then(() => alert("Account ban gaya!"))
+            .catch(err => alert("Signup Error: " + err.message));
+    }
+
+    function logout() {
+        auth.signOut().then(() => alert("Logged out!"));
+    }
+
+    function changePassword() {
+        const oldPass = document.getElementById('oldPassInput').value;
+        const newPass = document.getElementById('newPassInput').value;
+
+        if (!oldPass || !newPass) return alert("Please enter both current and new passwords.");
+
+        const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, oldPass);
+
+        currentUser.reauthenticateWithCredential(credential).then(() => {
+            currentUser.updatePassword(newPass).then(() => {
+                alert("Password changed successfully!");
+                document.getElementById('oldPassInput').value = '';
+                document.getElementById('newPassInput').value = '';
+            }).catch(err => alert(err.message));
+        }).catch(() => alert("Incorrect current password. Please try again."));
+    }
+
+    function loadCloudData() {
+        db.ref('users/' + currentUser.uid).on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) appData = data;
+            if (!appData.months) appData.months = {};
+            
+            if (!appData.months[currentMonthKey]) {
+                appData.months[currentMonthKey] = {
+                    name: currentMonthName,
+                    salary: 0,
+                    incomeList: [],
+                    expenses: 0,
+                    savings: 0,
+                    expenseList: []
+                };
+            }
+
+            Object.keys(appData.months).forEach(k => {
+                if (!appData.months[k].expenseList) appData.months[k].expenseList = [];
+                if (!appData.months[k].incomeList) appData.months[k].incomeList = [];
+            });
+
+            if (!appData.months[selectedMonthKey]) selectedMonthKey = currentMonthKey;
+
+            populateMonthDropdown();
+            updateUI();
+        }, error => alert("Database Error: " + error.message));
+    }
+
+    function populateMonthDropdown() {
+        const monthSelect = document.getElementById('monthSelect');
+        monthSelect.innerHTML = '';
+        
+        const sortedKeys = Object.keys(appData.months).sort().reverse();
+        sortedKeys.forEach(mKey => {
+            const m = appData.months[mKey];
+            const option = document.createElement('option');
+            option.value = mKey;
+            option.text = m.name;
+            if (mKey === selectedMonthKey) option.selected = true;
+            monthSelect.appendChild(option);
+        });
+    }
+
+    function changeSelectedMonth() {
+        selectedMonthKey = document.getElementById('monthSelect').value;
+        updateUI();
+    }
+
+    function saveData() {
+        if (currentUser) db.ref('users/' + currentUser.uid).set(appData);
+    }
+
+    function resetCurrentMonth() {
+        if (confirm("Are you sure you want to reset this month's balance to zero (0)?")) {
+            if (appData.months[selectedMonthKey]) {
+                appData.months[selectedMonthKey].salary = 0;
+                appData.months[selectedMonthKey].incomeList = [];
+                appData.months[selectedMonthKey].expenses = 0;
+                appData.months[selectedMonthKey].savings = 0;
+                appData.months[selectedMonthKey].expenseList = [];
+                saveData();
+            }
+        }
+    }
+
+    function deleteMonthRecord(mKey) {
+        if (confirm(`Are you sure you want to delete the record for ${appData.months[mKey].name}?`)) {
+            delete appData.months[mKey];
+            if (selectedMonthKey === mKey) {
+                const keys = Object.keys(appData.months);
+                selectedMonthKey = keys.length > 0 ? keys[0] : currentMonthKey;
+            }
+            saveData();
+        }
+    }
+
+    function deleteIncomeItem(index) {
+        const currentData = appData.months[selectedMonthKey];
+        if (!currentData || !currentData.incomeList) return;
+
+        const removed = currentData.incomeList.splice(index, 1)[0];
+        if (removed) {
+            currentData.salary -= removed.amount;
+            if (currentData.salary < 0) currentData.salary = 0;
+            saveData();
+        }
+    }
+
+    function deleteExpenseItem(index) {
+        const currentData = appData.months[selectedMonthKey];
+        if (!currentData || !currentData.expenseList) return;
+
+        const removed = currentData.expenseList.splice(index, 1)[0];
+        if (removed) {
+            currentData.expenses -= removed.amount;
+            if (currentData.expenses < 0) currentData.expenses = 0;
+            saveData();
+        }
+    }
+
+    function updateUI() {
+        const activeData = appData.months[selectedMonthKey] || { name: 'Month', salary: 0, expenses: 0, savings: 0, expenseList: [], incomeList: [] };
+        activeData.savings = activeData.salary - activeData.expenses;
+
+        document.getElementById('currentMonthTitle').innerText = activeData.name + " Overview";
+        document.getElementById('totalSalary').innerText = `Rs ${activeData.salary}`;
+        document.getElementById('totalExpense').innerText = `Rs ${activeData.expenses}`;
+        document.getElementById('totalSavings').innerText = `Rs ${activeData.savings}`;
+
+        renderIncomeTable(activeData.incomeList || []);
+        renderExpensesTable(activeData.expenseList || []);
+        renderLedger();
+    }
+
+    function renderIncomeTable(incomeList) {
+        const tbody = document.getElementById('incomeTableBody');
+        tbody.innerHTML = '';
+
+        if (!incomeList || incomeList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#64748b;">No income added for this month.</td></tr>`;
+            return;
+        }
+
+        incomeList.forEach((item, index) => {
+            const formattedDate = formatFullDate(item.date);
+            const row = `<tr>
+                <td><b>${formattedDate}</b></td>
+                <td>${item.description}</td>
+                <td class="income">Rs ${item.amount}</td>
+                <td><button class="delete-btn" onclick="deleteIncomeItem(${index})">X</button></td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+
+    function renderExpensesTable(expenseList) {
+        const tbody = document.getElementById('expenseTableBody');
+        tbody.innerHTML = '';
+
+        if (!expenseList || expenseList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#64748b;">No expenses added for this month.</td></tr>`;
+            return;
+        }
+
+        expenseList.forEach((item, index) => {
+            const formattedDate = formatFullDate(item.date);
+            const row = `<tr>
+                <td><b>${formattedDate}</b></td>
+                <td>${item.description}</td>
+                <td class="expense">Rs ${item.amount}</td>
+                <td><button class="delete-btn" onclick="deleteExpenseItem(${index})">X</button></td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+
+    function renderLedger() {
+        const ledgerBody = document.getElementById('ledgerTable');
+        const filterVal = document.getElementById('searchInput').value.toLowerCase();
+        ledgerBody.innerHTML = '';
+
+        Object.keys(appData.months).sort().reverse().forEach(mKey => {
+            const m = appData.months[mKey];
+            m.savings = m.salary - m.expenses;
+
+            if (m.name.toLowerCase().includes(filterVal)) {
+                const row = `<tr>
+                    <td><b>${m.name}</b></td>
+                    <td class="income">Rs ${m.salary}</td>
+                    <td class="expense">Rs ${m.expenses}</td>
+                    <td class="savings">Rs ${m.savings}</td>
+                    <td><button class="delete-btn" onclick="deleteMonthRecord('${mKey}')">Delete</button></td>
+                </tr>`;
+                ledgerBody.innerHTML += row;
+            }
+        });
+    }
+
+    function filterLedger() {
+        renderLedger();
+    }
+
+    // Income Form Submit
+    document.getElementById('salaryForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const dateVal = document.getElementById('salaryDate').value;
+        const descVal = document.getElementById('salaryDesc').value;
+        const amt = parseFloat(document.getElementById('salaryAmount').value);
+
+        if (isNaN(amt) || amt <= 0 || !dateVal || !descVal) return;
+
+        const parts = dateVal.split('-');
+        const targetMonthKey = `${parts[0]}-${parts[1]}`;
+        const dateObj = new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
+        const targetMonthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+        if (!appData.months[targetMonthKey]) {
+            appData.months[targetMonthKey] = { name: targetMonthName, salary: 0, incomeList: [], expenses: 0, savings: 0, expenseList: [] };
+        }
+
+        const currentData = appData.months[targetMonthKey];
+        if (!currentData.incomeList) currentData.incomeList = [];
+
+        currentData.incomeList.push({
+            date: dateVal,
+            description: descVal,
+            amount: amt
+        });
+
+        currentData.salary = (currentData.salary || 0) + amt;
+
+        document.getElementById('salaryDesc').value = '';
+        document.getElementById('salaryAmount').value = '';
+        selectedMonthKey = targetMonthKey;
+
+        saveData();
+    });
+
+    // Expense Form Submit
+    document.getElementById('expenseForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const dateVal = document.getElementById('expenseDate').value;
+        const descVal = document.getElementById('expenseDesc').value;
+        const amt = parseFloat(document.getElementById('expenseAmount').value);
+
+        if (!amt || amt <= 0 || !dateVal || !descVal) return;
+
+        const parts = dateVal.split('-');
+        const targetMonthKey = `${parts[0]}-${parts[1]}`;
+        const dateObj = new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
+        const targetMonthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+        if (!appData.months[targetMonthKey]) {
+            appData.months[targetMonthKey] = { name: targetMonthName, salary: 0, incomeList: [], expenses: 0, savings: 0, expenseList: [] };
+        }
+
+        const currentData = appData.months[targetMonthKey];
+        if (!currentData.expenseList) currentData.expenseList = [];
+
+        currentData.expenseList.push({
+            date: dateVal,
+            description: descVal,
+            amount: amt
+        });
+
+        currentData.expenses = (currentData.expenses || 0) + amt;
+
+        document.getElementById('expenseDesc').value = '';
+        document.getElementById('expenseAmount').value = '';
+        selectedMonthKey = targetMonthKey;
+
+        saveData();
+    });
+</script>
+
+</body>
+</html>
+          
