@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly Budget Tracker</title>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', 'Segoe UI', sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* Top Navigation Bar */
+    .top-bar {
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card);
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .menu-btn { font-size: 1.3rem; cursor: pointer; color: var(--text); transition: color 0.2s; }
+    .menu-btn:hover { color: var(--primary); }
+    .app-title { font-size: 1.15rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; }
+
+    /* Auth Styling */
+    .auth-wrapper {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--card);
+      padding: 2.5rem 2rem;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    .auth-header { text-align: center; margin-bottom: 2rem; }
+    .auth-header i { font-size: 2.5rem; color: var(--success); margin-bottom: 0.5rem; }
+    .auth-header h2 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .auth-header p { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+
+    .form-group { margin-bottom: 1.2rem; }
+    .form-group label { display: block; margin-bottom: 0.4rem; font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .input-icon-group { position: relative; }
+    .input-icon-group i { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 0.9rem; }
+    .input-icon-group input, .input-icon-group select { width: 100%; padding: 0.75rem 0.75rem 0.75rem 2.5rem; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: border-color 0.2s; font-size: 0.95rem; background: var(--card); }
+    .input-icon-group input:focus { border-color: var(--primary); }
+
+    .btn { width: 100%; padding: 0.8rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 0.95rem; }
+    .btn:hover { background: var(--primary-dark); }
+    .btn-danger { background: var(--danger); }
+    .btn-danger:hover { background: #dc2626; }
+    
+    .auth-toggle { text-align: center; margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted); }
+    .auth-toggle span { color: var(--primary); cursor: pointer; font-weight: 600; }
+
+    /* Main Container */
+    .main-content { max-width: 600px; margin: 1.5rem auto; padding: 0 1rem; display: none; }
+
+    /* Header Month Selector */
+    .month-header-card {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-bottom: 1.2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .month-header-card h3 { font-size: 1.1rem; color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+    .month-select { padding: 0.5rem 0.8rem; border-radius: 8px; border: 1px solid var(--border); font-weight: 600; color: var(--text); outline: none; background: var(--bg); cursor: pointer; }
+
+    /* Summary Bar */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-card {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .summary-card i { font-size: 1.2rem; margin-bottom: 0.4rem; }
+    .summary-card h5 { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-card p { font-size: 0.95rem; font-weight: 700; margin-top: 0.2rem; }
+    
+    .card-inc { border-top: 3px solid var(--success); }
+    .card-inc i, .val-income { color: var(--success); }
+    .card-exp { border-top: 3px solid var(--danger); }
+    .card-exp i, .val-expense { color: var(--danger); }
+    .card-bal { border-top: 3px solid var(--primary); }
+    .card-bal i, .val-balance { color: var(--primary); }
+
+    /* Entry Cards */
+    .entry-card {
+      background: var(--card);
+      padding: 1.2rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-bottom: 1.2rem;
+    }
+    .entry-card h3 { font-size: 1.05rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; }
+    .entry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.8rem; }
+    .entry-grid input { width: 100%; padding: 0.65rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; outline: none; font-size: 0.85rem; }
+    .entry-grid input:focus { border-color: var(--primary); }
+    .save-btn { width: 100%; padding: 0.7rem; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: opacity 0.2s; }
+    .save-btn:hover { opacity: 0.9; }
+
+    /* Sidebar Drawer */
+    .sidebar-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); display: none; z-index: 100;
+    }
+    .sidebar {
+      position: fixed; top: 0; left: -290px; width: 290px; height: 100%;
+      background: var(--card); z-index: 101; transition: left 0.3s ease;
+      padding: 1.5rem 1.2rem; display: flex; flex-direction: column; justify-content: space-between;
+      box-shadow: 5px 0 25px rgba(0,0,0,0.1);
+    }
+    .sidebar.open { left: 0; }
+    .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .close-btn { font-size: 1.2rem; cursor: pointer; color: var(--muted); }
+    .close-btn:hover { color: var(--text); }
+    .menu-list { list-style: none; margin-top: 1rem; }
+    .menu-item {
+      padding: 0.75rem 0.8rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.8rem;
+      color: var(--text); font-weight: 500; margin-bottom: 0.4rem; transition: background 0.2s, color 0.2s; font-size: 0.9rem;
+    }
+    .menu-item:hover { background: var(--bg); color: var(--primary); }
+    .menu-item i { width: 20px; color: var(--muted); }
+    .menu-item:hover i { color: var(--primary); }
+
+    /* Modals */
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(3px); z-index: 200; justify-content: center; align-items: center; padding: 1rem;
+    }
+    .modal-content {
+      background: var(--card); width: 100%; max-width: 450px; border-radius: 16px; padding: 1.8rem; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: var(--shadow);
+    }
+    .modal-close { position: absolute; top: 1.2rem; right: 1.2rem; cursor: pointer; font-size: 1.2rem; color: var(--muted); }
+    .modal-close:hover { color: var(--text); }
+
+    /* Transaction List Styling */
+    .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 0; border-bottom: 1px solid var(--border); }
+    .tx-item:last-child { border-bottom: none; }
+    .del-btn { color: var(--danger); cursor: pointer; background: none; border: none; padding: 0.3rem; font-size: 0.9rem; }
+    .del-btn:hover { opacity: 0.8; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar (Hidden on Login) -->
+  <div class="top-bar" id="topBar">
+    <div class="menu-btn" id="openMenuBtn"><i class="fa-solid fa-bars"></i></div>
+    <div class="app-title">
+      <i class="fa-solid fa-sack-dollar" style="color: var(--success); font-size: 1.3rem;"></i> 
+      <span>Monthly Budget</span>
+    </div>
+    <div style="width: 24px;"></div>
+  </div>
+
+  <!-- Slide-out Sidebar Menu -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="sidebar" id="sidebar">
+    <div>
+      <div class="sidebar-header">
+        <div>
+          <h4 style="color: var(--primary); font-size: 1rem;">Account Menu</h4>
+          <p id="userEmailNav" style="font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem;"></p>
+        </div>
+        <div class="close-btn" id="closeMenuBtn"><i class="fa-solid fa-xmark"></i></div>
+      </div>
+      <ul class="menu-list">
+        <li class="menu-item" id="navOverview"><i class="fa-solid fa-chart-pie"></i> Analytics Overview</li>
+        <li class="menu-item" id="navIncomeList"><i class="fa-solid fa-money-bill-trend-up"></i> Salary & Income List</li>
+        <li class="menu-item" id="navExpenseList"><i class="fa-solid fa-receipt"></i> Expenses List</li>
+        <li class="menu-item" id="navHistory"><i class="fa-solid fa-list-check"></i> Full History</li>
+        <li class="menu-item" id="navChangePass"><i class="fa-solid fa-shield-halved"></i> Change Password</li>
+      </ul>
+    </div>
+    <button class="btn btn-danger" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+  </div>
+
+  <!-- Auth Screen -->
+  <div id="authContainer" class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <i class="fa-solid fa-sack-dollar"></i>
+        <h2 id="authTitle">Welcome Back</h2>
+        <p id="authSubtitle">Please enter your credentials to log in</p>
+      </div>
+      <form id="authForm">
+        <div class="form-group">
+          <label>Email Address</label>
+          <div class="input-icon-group">
+            <i class="fa-solid fa-envelope"></i>
+            <input type="email" id="email" required placeholder="name@example.com">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="input-icon-group">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="password" required placeholder="••••••••">
+          </div>
+        </div>
+        <button type="submit" class="btn" id="authBtn">Sign In</button>
+      </form>
+      <div class="auth-toggle">
+        <span id="toggleAuth">Don't have an account? Sign Up</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Screen -->
+  <div id="mainContent" class="main-content">
+    
+    <!-- Top Month Header & Selector -->
+    <div class="month-header-card">
+      <h3><i class="fa-solid fa-calendar-days"></i> <span id="currentMonthName">Select Month</span></h3>
+      <input type="month" id="monthPicker" class="month-select">
+    </div>
+
+    <!-- Quick Summary Grid -->
+    <div class="summary-grid">
+      <div class="summary-card card-inc">
+        <i class="fa-solid fa-circle-arrow-down"></i>
+        <h5>Total Income</h5>
+        <p class="val-income" id="sumIncome">PKR 0</p>
+      </div>
+      <div class="summary-card card-exp">
+        <i class="fa-solid fa-circle-arrow-up"></i>
+        <h5>Total Expense</h5>
+        <p class="val-expense" id="sumExpense">PKR 0</p>
+      </div>
+      <div class="summary-card card-bal">
+        <i class="fa-solid fa-scale-balanced"></i>
+        <h5>Net Balance</h5>
+        <p class="val-balance" id="sumBalance">PKR 0</p>
+      </div>
+    </div>
+
+    <!-- 1. Add Income Form -->
+    <div class="entry-card">
+      <h3 style="color: var(--success);"><i class="fa-solid fa-plus-circle"></i> Add Salary / Income</h3>
+      <form id="incomeForm">
+        <div class="entry-grid">
+          <input type="text" id="incTitle" placeholder="Income Title (e.g. Salary)" required>
+          <input type="number" id="incAmount" placeholder="Amount (PKR)" required min="1">
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <input type="date" id="incDate" required style="width:100%; padding: 0.65rem; border: 1px solid var(--border); border-radius:8px;">
+        </div>
+        <button type="submit" class="save-btn" style="background: var(--success);">Save Income</button>
+      </form>
+    </div>
+
+    <!-- 2. Add Expense Form -->
+    <div class="entry-card">
+      <h3 style="color: var(--danger);"><i class="fa-solid fa-minus-circle"></i> Add Expense</h3>
+      <form id="expenseForm">
+        <div class="entry-grid">
+          <input type="text" id="expTitle" placeholder="Expense Title (e.g. Rent)" required>
+          <input type="number" id="expAmount" placeholder="Amount (PKR)" required min="1">
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+          <input type="date" id="expDate" required style="width:100%; padding: 0.65rem; border: 1px solid var(--border); border-radius:8px;">
+        </div>
+        <button type="submit" class="save-btn" style="background: var(--danger);">Save Expense</button>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- Modal: Analytics Overview -->
+  <div class="modal" id="overviewModal">
+    <div class="modal-content">
+      <div class="modal-close" onclick="closeModals()"><i class="fa-solid fa-xmark"></i></div>
+      <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; color: var(--text);">Analytics Overview</h3>
+      <canvas id="budgetChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Modal: Salary & Income List -->
+  <div class="modal" id="incomeModal">
+    <div class="modal-content">
+      <div class="modal-close" onclick="closeModals()"><i class="fa-solid fa-xmark"></i></div>
+      <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; color: var(--success);"><i class="fa-solid fa-money-bill-trend-up"></i> Income & Salary Transactions</h3>
+      <div id="incomeList"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Expenses List -->
+  <div class="modal" id="expenseModal">
+    <div class="modal-content">
+      <div class="modal-close" onclick="closeModals()"><i class="fa-solid fa-xmark"></i></div>
+      <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; color: var(--danger);"><i class="fa-solid fa-receipt"></i> Expense Transactions</h3>
+      <div id="expenseList"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Full History -->
+  <div class="modal" id="historyModal">
+    <div class="modal-content">
+      <div class="modal-close" onclick="closeModals()"><i class="fa-solid fa-xmark"></i></div>
+      <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; color: var(--text);">All Transactions</h3>
+      <div id="txHistoryList"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Change Password -->
+  <div class="modal" id="passModal">
+    <div class="modal-content">
+      <div class="modal-close" onclick="closeModals()"><i class="fa-solid fa-xmark"></i></div>
+      <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; color: var(--text);">Security Settings</h3>
+      <form id="changePassForm">
+        <div class="form-group">
+          <label>Old Password</label>
+          <div class="input-icon-group">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="oldPassword" placeholder="Enter current password" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>New Password</label>
+          <div class="input-icon-group">
+            <i class="fa-solid fa-key"></i>
+            <input type="password" id="newPassword" placeholder="Minimum 6 characters" required minlength="6">
+          </div>
+        </div>
+        <button type="submit" class="btn">Update Password</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Firebase JavaScript Logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
+      signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { 
+      getDatabase, ref, push, onValue, remove 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDHdUBGQs9pGTZtJvExY7rXuOuk5QM8990",
+      authDomain: "my-monthly-budget-75294.firebaseapp.com",
+      databaseURL: "https://my-monthly-budget-75294-default-rtdb.firebaseio.com",
+      projectId: "my-monthly-budget-75294",
+      storageBucket: "my-monthly-budget-75294.firebasestorage.app",
+      messagingSenderId: "971970220243",
+      appId: "1:971970220243:web:a3a0bc1392d2092ad04426",
+      measurementId: "G-PR8L28H884"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    // Setup Default Month (YYYY-MM)
+    const monthPicker = document.getElementById("monthPicker");
+    const currentMonthName = document.getElementById("currentMonthName");
+    const today = new Date();
+    const defaultMonth = today.toISOString().slice(0, 7);
+    monthPicker.value = defaultMonth;
+
+    // Set Default Dates in Inputs
+    document.getElementById("incDate").valueAsDate = today;
+    document.getElementById("expDate").valueAsDate = today;
+
+    function updateMonthDisplay(monthVal) {
+      const [year, month] = monthVal.split("-");
+      const dateObj = new Date(year, month - 1);
+      currentMonthName.innerText = dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    }
+    updateMonthDisplay(defaultMonth);
+
+    monthPicker.addEventListener("change", (e) => {
+      updateMonthDisplay(e.target.value);
+      if (currentUser) loadData(currentUser.uid);
+    });
+
+    // Sidebar & Navigation Controls
+    const openMenuBtn = document.getElementById("openMenuBtn");
+    const closeMenuBtn = document.getElementById("closeMenuBtn");
+    const sidebar = document.getElementById("sidebar");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+    const topBar = document.getElementById("topBar");
+
+    function toggleSidebar(open) {
+      if (open) {
+        sidebar.classList.add("open");
+        sidebarOverlay.style.display = "block";
+      } else {
+        sidebar.classList.remove("open");
+        sidebarOverlay.style.display = "none";
+      }
+    }
+
+    openMenuBtn.addEventListener("click", () => toggleSidebar(true));
+    closeMenuBtn.addEventListener("click", () => toggleSidebar(false));
+    sidebarOverlay.addEventListener("click", () => toggleSidebar(false));
+
+    // Modals Control
+    window.closeModals = function() {
+      document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    document.getElementById("navOverview").addEventListener("click", () => {
+      toggleSidebar(false);
+      document.getElementById("overviewModal").style.display = "flex";
+    });
+
+    document.getElementById("navIncomeList").addEventListener("click", () => {
+      toggleSidebar(false);
+      document.getElementById("incomeModal").style.display = "flex";
+    });
+
+    document.getElementById("navExpenseList").addEventListener("click", () => {
+      toggleSidebar(false);
+      document.getElementById("expenseModal").style.display = "flex";
+    });
+
+    document.getElementById("navHistory").addEventListener("click", () => {
+      toggleSidebar(false);
+      document.getElementById("historyModal").style.display = "flex";
+    });
+
+    document.getElementById("navChangePass").addEventListener("click", () => {
+      toggleSidebar(false);
+      document.getElementById("passModal").style.display = "flex";
+    });
+
+    // Auth Functionality
+    const authContainer = document.getElementById("authContainer");
+    const mainContent = document.getElementById("mainContent");
+    const authForm = document.getElementById("authForm");
+    const toggleAuth = document.getElementById("toggleAuth");
+    let isSignUp = false;
+    let currentUser = null;
+
+    toggleAuth.addEventListener("click", () => {
+      isSignUp = !isSignUp;
+      document.getElementById("authTitle").innerText = isSignUp ? "Create Account" : "Welcome Back";
+      document.getElementById("authSubtitle").innerText = isSignUp ? "Sign up to track your monthly budget" : "Please enter your credentials to log in";
+      document.getElementById("authBtn").innerText = isSignUp ? "Sign Up" : "Sign In";
+      toggleAuth.innerText = isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up";
+    });
+
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const pass = document.getElementById("password").value;
+      try {
+        if (isSignUp) await createUserWithEmailAndPassword(auth, email, pass);
+        else await signInWithEmailAndPassword(auth, email, pass);
+        authForm.reset();
+      } catch (err) { alert(err.message); }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      toggleSidebar(false);
+      signOut(auth);
+    });
+
+    // Change Password Handler with Re-authentication
+    document.getElementById("changePassForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const oldPass = document.getElementById("oldPassword").value;
+      const newPass = document.getElementById("newPassword").value;
+      
+      if (currentUser) {
+        const credential = EmailAuthProvider.credential(currentUser.email, oldPass);
+        try {
+          await reauthenticateWithCredential(currentUser, credential);
+          await updatePassword(currentUser, newPass);
+          alert("Password updated successfully!");
+          closeModals();
+          document.getElementById("changePassForm").reset();
+        } catch (err) {
+          alert("Old Password Incorrect or Failed: " + err.message);
+        }
+      }
+    });
+
+    // User Auth Observer
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        authContainer.style.display = "none";
+        topBar.style.display = "flex";
+        mainContent.style.display = "block";
+        document.getElementById("userEmailNav").innerText = user.email;
+        loadData(user.uid);
+      } else {
+        currentUser = null;
+        authContainer.style.display = "flex";
+        topBar.style.display = "none";
+        mainContent.style.display = "none";
+      }
+    });
+
+    // Add Income Data
+    document.getElementById("incomeForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!currentUser) return;
+      const title = document.getElementById("incTitle").value;
+      const amount = parseFloat(document.getElementById("incAmount").value);
+      const date = document.getElementById("incDate").value;
+      const monthKey = date.slice(0, 7);
+
+      push(ref(db, `users/${currentUser.uid}/transactions`), {
+        title, amount, type: "income", date, monthKey
+      });
+      document.getElementById("incomeForm").reset();
+      document.getElementById("incDate").valueAsDate = new Date();
+    });
+
+    // Add Expense Data
+    document.getElementById("expenseForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!currentUser) return;
+      const title = document.getElementById("expTitle").value;
+      const amount = parseFloat(document.getElementById("expAmount").value);
+      const date = document.getElementById("expDate").value;
+      const monthKey = date.slice(0, 7);
+
+      push(ref(db, `users/${currentUser.uid}/transactions`), {
+        title, amount, type: "expense", date, monthKey
+      });
+      document.getElementById("expenseForm").reset();
+      document.getElementById("expDate").valueAsDate = new Date();
+    });
+
+    // Load & Filter Data by Selected Month
+    let chartInstance = null;
+    function loadData(uid) {
+      const selectedMonth = monthPicker.value;
+      onValue(ref(db, `users/${uid}/transactions`), (snapshot) => {
+        const data = snapshot.val();
+        
+        const historyList = document.getElementById("txHistoryList");
+        const incomeList = document.getElementById("incomeList");
+        const expenseList = document.getElementById("expenseList");
+
+        historyList.innerHTML = "";
+        incomeList.innerHTML = "";
+        expenseList.innerHTML = "";
+
+        let totalInc = 0;
+        let totalExp = 0;
+        let hasData = false;
+
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            const item = data[key];
+            const itemMonth = item.monthKey || (item.date ? item.date.slice(0, 7) : "");
+
+            // Filter transactions by selected Month
+            if (itemMonth === selectedMonth) {
+              hasData = true;
+              if (item.type === "income") totalInc += item.amount;
+              else totalExp += item.amount;
+
+              const itemHTML = `
+                <div class="tx-item">
+                  <div>
+                    <strong style="color:var(--text);">${item.title}</strong>
+                    <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;">${item.date}</div>
+                  </div>
+                  <div>
+                    <span style="font-weight:700; color: ${item.type==='income'?'var(--success)':'var(--danger)'}">
+                      ${item.type==='income'?'+':'-'} PKR ${item.amount}
+                    </span>
+                    <button class="del-btn" onclick="deleteTx('${key}')" style="margin-left: 10px;"><i class="fa-solid fa-trash-can"></i></button>
+                  </div>
+                </div>
+              `;
+
+              // Append to Full History
+              historyList.innerHTML += itemHTML;
+
+              // Append to specific list
+              if (item.type === "income") incomeList.innerHTML += itemHTML;
+              else expenseList.innerHTML += itemHTML;
+            }
+          });
+        }
+
+        if (!hasData) {
+          const emptyText = `<p style="text-align:center; color:var(--muted); font-size:0.9rem;">No transactions recorded for this month.</p>`;
+          historyList.innerHTML = emptyText;
+          incomeList.innerHTML = emptyText;
+          expenseList.innerHTML = emptyText;
+        }
+
+        document.getElementById("sumIncome").innerText = `PKR ${totalInc}`;
+        document.getElementById("sumExpense").innerText = `PKR ${totalExp}`;
+        document.getElementById("sumBalance").innerText = `PKR ${totalInc - totalExp}`;
+
+        updateChart(totalInc, totalExp);
+      });
+    }
+
+    // Delete Item
+    window.deleteTx = function(key) {
+      if (currentUser) remove(ref(db, `users/${currentUser.uid}/transactions/${key}`));
+    }
+
+    // Chart Render
+    function updateChart(inc, exp) {
+      const ctx = document.getElementById('budgetChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Income', 'Expense'],
+          datasets: [{ data: [inc, exp], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+      });
+    }
+  </script>
+</body>
+</html>
